@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"reflect"
 	"sort"
@@ -320,6 +321,8 @@ type defmsg struct {
 	globalMsgNum MesgNum
 	fields       byte
 	fieldDefs    []fieldDef
+	fieldDevDefs []fieldDevDef
+
 }
 
 func (dm defmsg) String() string {
@@ -327,6 +330,13 @@ func (dm defmsg) String() string {
 		"local: %d | global: %v | arch: %v | fields: %d",
 		dm.localMsgType, dm.globalMsgNum, dm.arch, dm.fields,
 	)
+}
+
+type fieldDevDef struct {
+	num   byte
+	size  byte
+	devDataIndex byte
+	btype types.Base
 }
 
 type fieldDef struct {
@@ -439,10 +449,12 @@ func (d *decoder) parseDefinitionMessage(recordHeader byte) (*defmsg, error) {
 	}
 
 	dm.fieldDefs = make([]fieldDef, dm.fields)
+
 	for i, fd := range dm.fieldDefs {
 		fd.num = d.tmp[i*3]
 		fd.size = d.tmp[(i*3)+1]
 		fd.btype = types.DecodeBase(d.tmp[(i*3)+2])
+		log.Println(fd.num, fd.size, d.tmp[(i*3)+2], "hello")
 		if err = d.validateFieldDef(dm.globalMsgNum, fd); err != nil {
 			if d.debug {
 				d.opts.logger.Println("illegal definition message:", dm)

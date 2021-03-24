@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -61,6 +62,37 @@ const goMajorVersionForDecodeGolden = "go1.15"
 func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(m.Run())
+}
+
+func TestDecodeXOSSSG(t *testing.T){
+	data, err := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
+	//data, err := ioutil.ReadFile("./testdata/000096E2-9757-4A45-9A6B-7BB2DCCAA96E.fit")
+	//data, err := ioutil.ReadFile("./testdata/0000bdd1-492a-452e-bb91-fdbc166e0df7.fit")
+	//data, err := ioutil.ReadFile("./testdata/1631250047.fit")
+
+	if err != nil {
+		t.Fatalf("reading file failed: %v", err)
+	}
+	fitData, err := fit.Decode(bytes.NewReader(data), fit.WithStdLogger())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	activity, _ := fitData.Activity()
+
+	//log.Println(activity.Records)
+	for _, session := range activity.Sessions{
+		log.Println(*session)
+	}
+	for _, lap := range activity.Laps{
+		log.Println(*lap)
+	}
+	//log.Println(activity.Laps)
+	log.Println(activity.Activity)
+	//for _, record := range activity.Records {
+	//	t.Log(record.GetAltitudeScaled(), record.PositionLong,
+	//		record.PositionLat, "shit...")
+	//}
 }
 
 func TestDecode(t *testing.T) {
