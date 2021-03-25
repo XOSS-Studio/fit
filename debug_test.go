@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -27,12 +28,14 @@ func NoneZeroBool(value byte) bool {
 	}
 	return false
 }
-func TestReaderFitFile(t *testing.T) {
-	var defmsgs [maxLocalMesgs]*defmsg
+
+func myDecoder(filepath string){
 	//data, _ := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
 	//data, _ := ioutil.ReadFile("./testdata/000096E2-9757-4A45-9A6B-7BB2DCCAA96E.fit")
-	data, _ := ioutil.ReadFile("./testdata/0000bdd1-492a-452e-bb91-fdbc166e0df7.fit")
 	//data, _ := ioutil.ReadFile("./testdata/1631250047.fit")
+	var defmsgs [maxLocalMesgs]*defmsg
+
+	data, _ := ioutil.ReadFile(filepath)
 	var size byte
 	var tmp [255 * 3]byte
 	reader := bytes.NewReader(data)
@@ -50,7 +53,6 @@ func TestReaderFitFile(t *testing.T) {
 	log.Println("ProtocolVersion: ", tmp[0])
 	log.Println("ProfileVersion: ", binary.LittleEndian.Uint16(tmp[1:3]))
 	dataSize := binary.LittleEndian.Uint32(tmp[3:7])
-	totalSize := dataSize
 	log.Println("Data Size: ", binary.LittleEndian.Uint32(tmp[3:7]))
 	if string(tmp[7:11]) != ".FIT" {
 		panic("invalid file format")
@@ -58,7 +60,7 @@ func TestReaderFitFile(t *testing.T) {
 
 	counter := 0
 	for {
-		log.Println("size left: ", dataSize, totalSize)
+		//log.Println("size left: ", dataSize, totalSize)
 		counter += 1
 		if dataSize <= 0 {
 			log.Println("DONE")
@@ -190,6 +192,41 @@ func TestReaderFitFile(t *testing.T) {
 			}
 			PrintValue(msgv)
 		}
+	}
+}
+
+func TestBatchReaderFitFile(t *testing.T) {
+	path := "/Users/xingzhe/project/xingzhe/golang/sprinter-go/volumes/fits/"
+	dir, _ := ioutil.ReadDir(path)
+	for idx, fi := range dir {
+		log.Println(idx, filepath.Ext(path + fi.Name()))
+		if filepath.Ext(path + fi.Name()) == ".fit"{
+			myDecoder(path + fi.Name())
+		}
+	}
+}
+
+func TestReadFitFile(t *testing.T){
+	data, _ := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
+	reader := bytes.NewReader(data)
+	tmp := make([]byte , 3*255)
+	parseFileHeader(reader, tmp)
+}
+
+func parseFileHeader(reader io.Reader, tmp []byte){
+	var size byte
+	err := binary.Read(reader, binary.LittleEndian, &size)
+	if err != nil {
+		log.Println(err)
+	}
+	io.ReadFull(reader, tmp[:size-1])
+	_ = checkProtocolVersion(tmp[0])
+	log.Println("ProtocolVersion: ", tmp[0])
+	log.Println("ProfileVersion: ", binary.LittleEndian.Uint16(tmp[1:3]))
+	dataSize := binary.LittleEndian.Uint32(tmp[3:7])
+	log.Println("Data Size: ", dataSize)
+	if string(tmp[7:11]) != ".FIT" {
+		panic("invalid file format")
 	}
 }
 
