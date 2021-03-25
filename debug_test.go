@@ -3,11 +3,15 @@ package fit
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"github.com/tormoder/fit/internal/types"
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
+	"reflect"
 	"testing"
+	"time"
 )
 
 type MessageHeader struct {
@@ -24,9 +28,10 @@ func NoneZeroBool(value byte) bool {
 	}
 	return false
 }
-func TestReaderFitFile(t *testing.T){
+func TestReaderFitFile(t *testing.T) {
 	var defmsgs [maxLocalMesgs]*defmsg
-	data, _ := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
+	//data, _ := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
+	data, _ := ioutil.ReadFile("./testdata/1631250047.fit")
 	var size byte
 	var tmp [255 * 3]byte
 	reader := bytes.NewReader(data)
@@ -52,9 +57,6 @@ func TestReaderFitFile(t *testing.T){
 	counter := 0
 	for {
 		counter += 1
-		if counter > 100 {
-			break
-		}
 		if dataSize < 0 {
 			break
 		}
@@ -63,7 +65,7 @@ func TestReaderFitFile(t *testing.T){
 		dataSize -= 1
 		// not (compressed timestamp && is_definition)
 		var messageHeader MessageHeader
-		if header&0x80 != 0 {   // bit 7: Is this record a compressed timestamp?
+		if header&0x80 != 0 { // bit 7: Is this record a compressed timestamp?
 			messageHeader = MessageHeader{
 				IsDefinition:       false,
 				IsDeveloperData:    false,
@@ -98,7 +100,8 @@ func TestReaderFitFile(t *testing.T){
 			dataSize -= 1
 			dm.fields = tmp[:1][0]
 			dm.fieldDefs = make([]fieldDef, dm.fields)
-			_, err := io.ReadFull(reader, tmp[0 : 3*uint16(dm.fields)])
+			_, err := io.ReadFull(reader, tmp[0:3*uint16(dm.fields)])
+			dataSize -= 3 * uint32(dm.fields)
 			if err != nil {
 				panic(err)
 			}
@@ -121,6 +124,7 @@ func TestReaderFitFile(t *testing.T){
 				dm.fieldDevDefs = make([]fieldDevDef, numDevFields)
 				for i := 0; i < int(numDevFields); i++ {
 					io.ReadFull(reader, tmp[:3])
+					dataSize -= 3
 					dm.fieldDevDefs[i] = fieldDevDef{
 						num:          tmp[0],
 						size:         tmp[1],
@@ -140,20 +144,96 @@ func TestReaderFitFile(t *testing.T){
 			if dm == nil {
 				panic("no definition messages")
 			}
+			var msgv reflect.Value
+			knownMsg := knownMsgNums[dm.globalMsgNum]
+			if knownMsg {
+				msgv = getMesgAllInvalid(dm.globalMsgNum)
+			}
 
 			for _, dfield := range dm.fieldDefs {
+				pfield, _ := getField(dm.globalMsgNum, dfield.num)
+				fieldv := msgv.Field(pfield.sindex)
+
 				dsize := int(dfield.size)
 				io.ReadFull(reader, tmp[0:dsize])
-				if dfield.btype == types.BaseUint32{
-					log.Println(dm.arch.Uint32(tmp[0:dsize]), "come on 1")
-				} else if dfield.btype == types.BaseUint16{
-					log.Println(dm.arch.Uint16(tmp[0:dsize]), "come on 2")
-				}else if dfield.btype == types.BaseUint8{
-					log.Println(dm.arch.Uint16(tmp[0:dsize]), "come on 3")
-				}else if dfield.btype == types.BaseString {
-					log.Println(string(tmp[0:dsize]), "come on 4")
+				dataSize -= uint32(dsize)
+				switch pfield.t.Kind() {
+				case types.NativeFit:
+					if !pfield.t.Array() {
+						parseFitField(dm, dfield, tmp[0:dsize], dsize, fieldv)
+					}else {
+
+					}
+				case types.TimeUTC:
+					u32 := dm.arch.Uint32(tmp[:types.BaseUint32.Size()])
+					datetime := timeBase.Add(time.Duration(u32) * time.Second)
+					fieldv.Set(reflect.ValueOf(datetime))
+				case types.TimeLocal:
+					u32 := dm.arch.Uint32(tmp[:types.BaseUint32.Size()])
+					datetime := timeBase.Add(time.Duration(u32) * time.Second)
+					fieldv.Set(reflect.ValueOf(datetime))
+				case types.Lat:
+					i32 := dm.arch.Uint32(tmp[:types.BaseSint32.Size()])
+					lat := NewLatitude(int32(i32))
+					fieldv.Set(reflect.ValueOf(lat))
+				case types.Lng:
+					i32 := dm.arch.Uint32(tmp[:types.BaseSint32.Size()])
+					lng := NewLongitude(int32(i32))
+					fieldv.Set(reflect.ValueOf(lng))
+				default:
+					panic("parseDataFields: unreachable: unknown kind")
 				}
 			}
+			PrintValue(msgv)
 		}
+
+		log.Println("next....")
+	}
+}
+
+func parseFitFieldArray(){
+
+}
+
+func parseFitField(dm *defmsg, dfield fieldDef, tmp []byte, dsize int, fieldv reflect.Value) {
+	switch dfield.btype {
+	case types.BaseByte, types.BaseEnum, types.BaseUint8, types.BaseUint8z:
+		fieldv.SetUint(uint64(tmp[0]))
+	case types.BaseSint8:
+		fieldv.SetInt(int64(tmp[0]))
+	case types.BaseSint16:
+		fieldv.SetInt(int64(dm.arch.Uint16(tmp[0:dsize])))
+	case types.BaseUint16, types.BaseUint16z:
+		fieldv.SetUint(uint64(dm.arch.Uint16(tmp[0:dsize])))
+	case types.BaseSint32:
+		fieldv.SetInt(int64(dm.arch.Uint32(tmp[0:dsize])))
+	case types.BaseUint32, types.BaseUint32z:
+		fieldv.SetUint(uint64(dm.arch.Uint32(tmp[0:dsize])))
+	case types.BaseFloat32:
+		bits := dm.arch.Uint32(tmp[0:dsize])
+		f32 := float64(math.Float32frombits(bits))
+		fieldv.SetFloat(f32)
+	case types.BaseFloat64:
+		bits := dm.arch.Uint64(tmp[0:dsize])
+		f64 := math.Float64frombits(bits)
+		fieldv.SetFloat(f64)
+	case types.BaseString:
+		fieldv.SetString(string(tmp[0:dsize]))
+	default:
+		log.Println(fmt.Errorf("unknown base type %d for field %v in definition message %v",
+			dfield.btype, dfield, dm))
+	}
+}
+
+func PrintValue(value reflect.Value){
+	switch tt := value.Interface().(type) {
+	case FileIdMsg:
+		log.Println("FileIdMsg", tt)
+	case FileCreatorMsg:
+		log.Println("FileCreatorMsg", &tt)
+	case TimestampCorrelationMsg:
+		log.Println("TimestampCorrelationMsg", &tt)
+	default:
+		log.Println("default", value)
 	}
 }

@@ -65,10 +65,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestDecodeXOSSSG(t *testing.T){
-	data, err := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
+	//data, err := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
 	//data, err := ioutil.ReadFile("./testdata/000096E2-9757-4A45-9A6B-7BB2DCCAA96E.fit")
 	//data, err := ioutil.ReadFile("./testdata/0000bdd1-492a-452e-bb91-fdbc166e0df7.fit")
-	//data, err := ioutil.ReadFile("./testdata/1631250047.fit")
+	data, err := ioutil.ReadFile("./testdata/1631250047.fit")
 
 	if err != nil {
 		t.Fatalf("reading file failed: %v", err)
