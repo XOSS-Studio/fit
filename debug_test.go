@@ -22,7 +22,6 @@ type MessageHeader struct {
 }
 
 func NoneZeroBool(value byte) bool {
-	log.Println(value)
 	if value != 0 {
 		return true
 	}
@@ -31,7 +30,9 @@ func NoneZeroBool(value byte) bool {
 func TestReaderFitFile(t *testing.T) {
 	var defmsgs [maxLocalMesgs]*defmsg
 	//data, _ := ioutil.ReadFile("./testdata/0000a2aa-adc3-4389-8bea-97d52898a2fa.fit")
-	data, _ := ioutil.ReadFile("./testdata/1631250047.fit")
+	//data, _ := ioutil.ReadFile("./testdata/000096E2-9757-4A45-9A6B-7BB2DCCAA96E.fit")
+	data, _ := ioutil.ReadFile("./testdata/0000bdd1-492a-452e-bb91-fdbc166e0df7.fit")
+	//data, _ := ioutil.ReadFile("./testdata/1631250047.fit")
 	var size byte
 	var tmp [255 * 3]byte
 	reader := bytes.NewReader(data)
@@ -49,6 +50,7 @@ func TestReaderFitFile(t *testing.T) {
 	log.Println("ProtocolVersion: ", tmp[0])
 	log.Println("ProfileVersion: ", binary.LittleEndian.Uint16(tmp[1:3]))
 	dataSize := binary.LittleEndian.Uint32(tmp[3:7])
+	totalSize := dataSize
 	log.Println("Data Size: ", binary.LittleEndian.Uint32(tmp[3:7]))
 	if string(tmp[7:11]) != ".FIT" {
 		panic("invalid file format")
@@ -56,8 +58,10 @@ func TestReaderFitFile(t *testing.T) {
 
 	counter := 0
 	for {
+		log.Println("size left: ", dataSize, totalSize)
 		counter += 1
-		if dataSize < 0 {
+		if dataSize <= 0 {
+			log.Println("DONE")
 			break
 		}
 		io.ReadFull(reader, tmp[:1])
@@ -161,7 +165,7 @@ func TestReaderFitFile(t *testing.T) {
 				case types.NativeFit:
 					if !pfield.t.Array() {
 						parseFitField(dm, dfield, tmp[0:dsize], dsize, fieldv)
-					}else {
+					} else {
 
 					}
 				case types.TimeUTC:
@@ -186,12 +190,10 @@ func TestReaderFitFile(t *testing.T) {
 			}
 			PrintValue(msgv)
 		}
-
-		log.Println("next....")
 	}
 }
 
-func parseFitFieldArray(){
+func parseFitFieldArray() {
 
 }
 
@@ -225,15 +227,15 @@ func parseFitField(dm *defmsg, dfield fieldDef, tmp []byte, dsize int, fieldv re
 	}
 }
 
-func PrintValue(value reflect.Value){
-	switch tt := value.Interface().(type) {
+func PrintValue(value reflect.Value) {
+	switch value.Interface().(type) {
 	case FileIdMsg:
-		log.Println("FileIdMsg", tt)
+		//log.Println("FileIdMsg", tt)
 	case FileCreatorMsg:
-		log.Println("FileCreatorMsg", &tt)
+		//log.Println("FileCreatorMsg", &tt)
 	case TimestampCorrelationMsg:
-		log.Println("TimestampCorrelationMsg", &tt)
+		//log.Println("TimestampCorrelationMsg", &tt)
 	default:
-		log.Println("default", value)
+		//log.Println("default", value, reflect.TypeOf(tt))
 	}
 }
